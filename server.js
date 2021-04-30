@@ -1,7 +1,13 @@
 const express = require('express');
 let mongodb = require('mongodb');
+let sanitizeHTML = require('sanitize-html');
 let app = express();
 let db;
+
+let port = process.env.PORT;
+if (port == null || port == ""){
+  port =3000
+}
 
 // alow incoming requests to have access to our public folder (IOW serve up static existing files)
 app.use(express.static(__dirname + '/public'));
@@ -13,7 +19,7 @@ mongodb.connect(
   { useNewUrlParser: true, useUnifiedTopology: true },
   function (err, client) {
     db = client.db();
-    app.listen(3000);
+    app.listen(port);
   }
 );
 
@@ -22,6 +28,17 @@ app.use(express.json());
 // using express to add all form values to a body object & add that body object gets added to the request object bc
 // by default express won't do this // that's why we use req.body.sugar  // this is how we access the form data easily
 app.use(express.urlencoded({ extended: false }));
+
+function passwordProtected(req, res, next) {
+  res.set('WWW-Authenticate', 'Basic realm="Simple Todo App"')
+  console.log(req.headers.authorization)
+  if (req.headers.authorization == "Basic cm9tZW86Zmxvd2Vycw==") {
+    next()
+  } else {
+    res.status(401).send("Authentication required")
+  }
+}
+app.use(passwordProtected)
 
 app.get('/', (req, res) => {
   db.collection('items')
@@ -67,8 +84,9 @@ app.get('/', (req, res) => {
 
 //to create an item
 app.post('/create-item', function (req, res) {
+  let safeText = sanitizeHTML(req.body.text, {allowedTags: [], allowedAttributes:{}})
   db.collection('items').insertOne(
-    { text: req.body.text },
+    { text: safeText },
     function (err, info) {
       //res.send('thanks for submitting the form');
       //redirecting to the base url
@@ -80,9 +98,10 @@ app.post('/create-item', function (req, res) {
 
 //to update an item
 app.post('/update-item', function (req, res) {
+  let safeText = sanitizeHTML(req.body.text, {allowedTags: [], allowedAttributes:{}})
   db.collection('items').findOneAndUpdate(
     { _id: new mongodb.ObjectId(req.body.id) } /*doc we want to update */,
-    { $set: { text: req.body.text } } /*property we want to update*/,
+    { $set: { text: safeText} } /*property we want to update*/,
     function () {
       res.send('Success');
     }
